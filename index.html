@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>SwapPoint · Pointage terrain géolocalisé</title>
+<meta name="description" content="Application de pointage géolocalisé pour les agents des swap stations.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2310171A'/%3E%3Cpath d='M13 2 4 14h6l-1 8 9-12h-6l1-8Z' fill='%233ECF8E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10171A;
+    --surface:#1B252A;
+    --surface-2:#212C31;
+    --border:#2E3B40;
+    --charge:#3ECF8E;
+    --charge-dim:#204034;
+    --alert:#FF6259;
+    --alert-dim:#402423;
+    --amber:#F5A93D;
+    --amber-dim:#3D2F14;
+    --text-hi:#EAF2F1;
+    --text-mid:#8FA5A9;
+    --text-low:#5C6E72;
+    --radius-card:16px;
+    --radius-sm:10px;
+    font-family:'Inter',sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(62,207,142,0.06), transparent 40%),
+      radial-gradient(circle at 85% 100%, rgba(245,169,61,0.05), transparent 45%),
+      var(--bg);
+    color:var(--text-hi);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:0 0 60px 0;
+  }
+  .app{
+    width:100%;
+    max-width:520px;
+    min-height:100vh;
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  ::selection{ background:var(--charge); color:#08110D; }
+  a{color:inherit;}
+
+  /* ---- Header ---- */
+  header.topbar{
+    padding:20px 20px 14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:1px solid var(--border);
+    gap:10px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .brand-mark{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(135deg, var(--charge), #1C8F5B);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .brand-mark svg{width:19px;height:19px;}
+  .brand-text h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px; font-weight:700; margin:0; letter-spacing:-0.01em;
+  }
+  .brand-text p{
+    margin:1px 0 0 0; font-size:11.5px; color:var(--text-mid);
+    font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;
+  }
+  .conn-indicator{
+    display:flex; align-items:center; gap:6px; flex-shrink:0;
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-mid);
+  }
+  .status-dot{ width:7px;height:7px;border-radius:50%; background:var(--text-low); }
+  .status-dot.online{ background:var(--charge); box-shadow:0 0 0 3px rgba(62,207,142,0.18); }
+  .status-dot.offline{ background:var(--alert); box-shadow:0 0 0 3px rgba(255,98,89,0.18); }
+  .status-dot.connecting{ background:var(--amber); animation:blink 1s infinite; }
+  @keyframes blink{ 50%{opacity:.3;} }
+
+  /* ---- Tabs ---- */
+  nav.tabs{ display:flex; gap:4px; padding:14px 20px 0 20px; }
+  nav.tabs button{
+    flex:1; background:var(--surface); border:1px solid var(--border);
+    color:var(--text-mid); font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:10px 6px; border-radius:10px 10px 0 0; cursor:pointer; border-bottom:none;
+    transition:color .15s, background .15s;
+  }
+  nav.tabs button.active{ color:var(--text-hi); background:var(--surface-2); }
+  main{
+    flex:1; background:var(--surface-2); border-top:1px solid var(--border);
+    padding:20px; display:flex; flex-direction:column; gap:16px;
+  }
+  .view{ display:none; flex-direction:column; gap:16px; animation:fadeIn .2s ease; }
+  .view.active{ display:flex; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  /* ---- Generic elements ---- */
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:16px; }
+  .label{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--text-mid); margin:0 0 8px 0; display:block;
+  }
+  input[type=text], input[type=number], input[type=email], input[type=password], textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text-hi);
+    font-family:'Inter',sans-serif; font-size:14.5px; padding:11px 13px; border-radius:var(--radius-sm); outline:none;
+  }
+  textarea{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; resize:vertical; min-height:90px; }
+  input:focus, textarea:focus{ border-color:var(--charge); box-shadow:0 0 0 3px rgba(62,207,142,0.15); }
+  input::placeholder, textarea::placeholder{ color:var(--text-low); }
+
+  .btn{
+    font-family:'Inter',sans-serif; font-weight:600; font-size:14px; padding:12px 16px;
+    border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2);
+    color:var(--text-hi); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:transform .1s, filter .15s;
+  }
+  .btn:active{ transform:scale(0.98); }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn-charge{ background:var(--charge); border-color:var(--charge); color:#07130D; }
+  .btn-amber{ background:transparent; border-color:var(--amber); color:var(--amber); }
+  .btn-alert{ background:transparent; border-color:var(--alert); color:var(--alert); }
+  .btn-ghost{ background:transparent; }
+  .btn-sm{ padding:7px 10px; font-size:12px; border-radius:8px; }
+  .btn-block{ width:100%; }
+  .btn[disabled]{ opacity:0.4; cursor:not-allowed; }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; }
+
+  .muted{ color:var(--text-mid); font-size:13px; line-height:1.5; }
+  .mono{ font-family:'IBM Plex Mono',monospace; }
+  .empty{ text-align:center; padding:34px 16px; color:var(--text-mid); }
+  .empty svg{ width:40px;height:40px;opacity:.5;margin-bottom:10px; }
+  .empty p{ font-size:13px; line-height:1.5; margin:0; }
+  .field-error{ color:var(--alert); font-size:12.5px; min-height:16px; margin-top:6px; }
+
+  /* ---- Pointage : search ---- */
+  .agent-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 13px; border:1px solid var(--border); border-radius:12px;
+    background:var(--surface-2); cursor:pointer; margin-bottom:8px; transition:border-color .15s;
+  }
+  .agent-item:hover{ border-color:var(--charge); }
+  .agent-item .who b{ font-size:14px; display:block; }
+  .agent-item .who span{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--text-mid); }
+  .chev{ color:var(--text-low); }
+
+  /* ---- Badge (agent sélectionné) ---- */
+  .badge{
+    background:linear-gradient(160deg, var(--surface) 0%, var(--surface-2) 100%);
+    border:1px solid var(--border); border-radius:18px; padding:18px; position:relative; overflow:hidden;
+  }
+  .badge::before{
+    content:""; position:absolute; top:-40%; right:-20%; width:180px; height:180px; border-radius:50%;
+    background:radial-gradient(circle, rgba(62,207,142,0.12), transparent 70%);
+  }
+  .badge-top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .badge-name{ font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; margin:0; }
+  .badge-code{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--charge); margin-top:3px; }
+  .badge-sup{ font-size:12.5px; color:var(--text-mid); margin-top:8px; }
+  .badge-status{ margin-top:10px; font-size:12px; color:var(--text-mid); font-family:'IBM Plex Mono',monospace; }
+  .change-link{ background:none;border:none;color:var(--text-mid); font-size:12px; text-decoration:underline; cursor:pointer; padding:0; }
+
+  /* ---- Radar / résultat géoloc ---- */
+  .radar-wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:22px 10px 8px 10px; }
+  .radar{ width:150px; height:150px; position:relative; display:flex; align-items:center; justify-content:center; }
+  .radar .ring{ position:absolute; border-radius:50%; border:1.5px solid var(--charge); opacity:0; }
+  .radar.scanning .ring{ animation:ping 1.8s ease-out infinite; }
+  .radar.scanning .ring:nth-child(2){ animation-delay:.6s; }
+  .radar.scanning .ring:nth-child(3){ animation-delay:1.2s; }
+  @keyframes ping{ 0%{ width:20px; height:20px; opacity:.9; } 100%{ width:150px; height:150px; opacity:0; } }
+  .radar .pin{
+    width:54px; height:54px; border-radius:50%; background:var(--surface-2); border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; z-index:2; transition:border-color .25s, background .25s;
+  }
+  .radar.ok .pin{ border-color:var(--charge); background:var(--charge-dim); }
+  .radar.ko .pin{ border-color:var(--alert); background:var(--alert-dim); }
+  .radar .pin svg{ width:24px;height:24px; }
+  .radar-dist{ font-family:'IBM Plex Mono',monospace; font-size:26px; font-weight:600; }
+  .radar-dist span{ font-size:13px; color:var(--text-mid); font-weight:400; }
+  .radar-station{ font-size:12.5px; color:var(--text-mid); text-align:center; }
+  .result-banner{ border-radius:12px; padding:12px 14px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:9px; }
+  .result-banner.ok{ background:var(--charge-dim); color:var(--charge); }
+  .result-banner.ko{ background:var(--alert-dim); color:var(--alert); }
+  .result-banner.wait{ background:var(--surface); color:var(--text-mid); }
+
+  /* ---- Table (historique) ---- */
+  .table-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:12px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; min-width:560px; }
+  th{
+    background:var(--surface); text-align:left; padding:9px 10px; font-family:'IBM Plex Mono',monospace;
+    font-size:10px; text-transform:uppercase; color:var(--text-mid); letter-spacing:.05em; white-space:nowrap;
+  }
+  td{ padding:9px 10px; border-top:1px solid var(--border); white-space:nowrap; }
+  td.status-ok{ color:var(--charge); font-weight:600; }
+  td.status-ko{ color:var(--alert); font-weight:600; }
+  .pill{ display:inline-flex; align-items:center; padding:3px 8px; border-radius:100px; font-size:10.5px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
+  .pill.in{ background:var(--charge-dim); color:var(--charge); }
+  .pill.out{ background:var(--amber-dim); color:var(--amber); }
+
+  .row-between{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .stat{ text-align:center; flex:1; }
+  .stat b{ display:block; font-family:'Space Grotesk',sans-serif; font-size:20px; }
+  .stat span{ font-size:10.5px; color:var(--text-mid); text-transform:uppercase; letter-spacing:.05em; }
+
+  .list-row{ display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .list-row:last-child{ border-bottom:none; }
+  .list-row .meta{ color:var(--text-mid); font-size:11px; font-family:'IBM Plex Mono',monospace; }
+  .icon-btn{ background:none;border:none;color:var(--text-mid); cursor:pointer; padding:4px; }
+  .icon-btn:hover{ color:var(--alert); }
+
+  h2.section-title{ font-family:'Space Grotesk',sans-serif; font-size:14.5px; margin:0 0 2px 0; }
+  .divider{ height:1px; background:var(--border); border:none; margin:2px 0; }
+
+  /* ---- Barre admin (déconnexion) ---- */
+  .admin-bar{
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--charge-dim); border:1px solid var(--charge); border-radius:12px; padding:10px 14px;
+  }
+  .admin-bar.show{ display:flex; }
+  .admin-bar span{ font-size:12px; color:var(--charge); font-family:'IBM Plex Mono',monospace; }
+  .logout-btn{ background:none; border:none; color:var(--charge); font-size:12px; text-decoration:underline; cursor:pointer; padding:0; }
+
+  /* ---- Visibilité conditionnelle admin ---- */
+  .admin-gate.hide{ display:none; }
+  .admin-block{ display:none; }
+  .admin-block.show{ display:block; }
+  .admin-stack{ display:none; }
+  .admin-stack.show{ display:flex; flex-direction:column; gap:16px; }
+
+  /* ---- Écran de connexion admin ---- */
+  .login-card{ display:flex; flex-direction:column; gap:12px; }
+  .login-card .lock-icon{
+    width:44px; height:44px; border-radius:12px; background:var(--surface-2); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; margin-bottom:2px;
+  }
+  .login-card h3{ font-family:'Space Grotesk',sans-serif; font-size:16px; margin:0; }
+  .login-card p.muted{ margin:0 0 4px 0; }
+
+  /* ---- Toast ---- */
+  #toast-host{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:999; display:flex; flex-direction:column; gap:8px; align-items:center; width:100%; max-width:480px; padding:0 16px; }
+  .toast{
+    background:var(--surface); border:1px solid var(--border); color:var(--text-hi);
+    padding:11px 16px; border-radius:11px; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,0.35); animation:toastIn .2s ease;
+  }
+  .toast.ok{ border-color:var(--charge); }
+  .toast.ko{ border-color:var(--alert); }
+  @keyframes toastIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1;transform:none;} }
+
+  /* ---- Modal ---- */
+  .modal-bg{ position:fixed; inset:0; background:rgba(8,12,13,0.7); display:none; align-items:center; justify-content:center; z-index:1000; padding:20px; }
+  .modal-bg.active{ display:flex; }
+  .modal{ background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; max-width:360px; width:100%; }
+  .modal p{ font-size:13.5px; color:var(--text-mid); line-height:1.5; }
+  .modal h3{ font-family:'Space Grotesk',sans-serif; margin:0 0 8px 0; font-size:16px; }
+
+  footer.note{ text-align:center; padding:14px 20px 0 20px; font-size:11px; color:var(--text-low); line-height:1.6; }
+
+  @media (max-width:400px){ .radar{ width:130px;height:130px; } }
+
+  @media (min-width:900px){
+    body{ padding:32px 0 60px 0; }
+    .app{ max-width:760px; min-height:auto; border-radius:20px; border:1px solid var(--border); overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.35); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" fill="#07130D"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>SwapPoint</h1>
+        <p>POINTAGE&nbsp;·&nbsp;GÉOLOCALISÉ</p>
+      </div>
+    </div>
+    <div class="conn-indicator">
+      <span class="status-dot connecting" id="conn-dot"></span>
+      <span id="conn-label">Connexion…</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-view="pointage">Pointage</button>
+    <button class="tab-btn" data-view="historique">Historique</button>
+    <button class="tab-btn" data-view="admin">Administration</button>
+  </nav>
+
+  <main>
+
+    <!-- ============ VUE POINTAGE (publique) ============ -->
+    <section class="view active" id="view-pointage">
+
+      <div id="pointage-empty" class="empty card" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        <p>Aucune station n'est encore enregistrée.<br>Un administrateur doit importer les agents et les stations depuis l'onglet <b>Administration</b>.</p>
+      </div>
+
+      <div id="pointage-search-block">
+        <label class="label">Rechercher un agent</label>
+        <input type="text" id="search-input" placeholder="Nom, prénom ou code ID…" autocomplete="off">
+        <div id="search-results" style="margin-top:12px;"></div>
+      </div>
+
+      <div id="agent-selected" style="display:none;"></div>
+      <div id="pointage-result" style="display:none;"></div>
+
+    </section>
+
+    <!-- ============ VUE HISTORIQUE (admin) ============ -->
+    <section class="view" id="view-historique">
+
+      <div class="card login-card admin-gate">
+        <div class="lock-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>Accès administrateur requis</h3>
+        <p class="muted">L'historique des pointages contient des données personnelles. Connectez-vous avec un compte administrateur pour y accéder.</p>
+        <input type="email" id="hist-login-email" placeholder="E-mail administrateur" autocomplete="username">
+        <input type="password" id="hist-login-password" placeholder="Mot de passe" autocomplete="current-password">
+        <div class="field-error" id="hist-login-error"></div>
+        <button class="btn btn-charge btn-block" id="hist-login-submit">Se connecter</button>
+      </div>
+
+      <div class="admin-bar">
+        <span>Connecté — <span id="admin-email-label"></span></span>
+        <button class="logout-btn">Se déconnecter</button>
+      </div>
+
+      <div class="admin-block">
+        <div class="card">
+          <div class="row-between">
+            <div class="stat"><b id="stat-total">0</b><span>Pointages</span></div>
+            <div class="stat"><b id="stat-ok">0</b><span>Validés</span></div>
+            <div class="stat"><b id="stat-ko">0</b><span>Échecs</span></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <label class="label">Filtrer</label>
+          <input type="text" id="filter-hist" placeholder="Nom, code ID ou station…">
+        </div>
+
+        <div class="table-wrap" style="margin-top:16px;">
+          <table id="hist-table">
+            <thead><tr><th>Date</th><th>Heure</th><th>Agent</th><th>Code</th><th>Station</th><th>Type</th><th>Distance</th><th>Statut</th></tr></thead>
+            <tbody id="hist-tbody"></tbody>
+          </table>
+        </div>
+        <p id="hist-empty" class="muted" style="text-align:center;">Aucun pointage enregistré pour l'instant.</p>
+
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn btn-block" id="export-detail-btn">Exporter le détail (CSV)</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-block" id="export-summary-btn">Exporter les heures travaillées (CSV)</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-alert btn-block" id="clear-history-btn">Vider l'historique des pointages</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============ VUE ADMINISTRATION (admin) ============ -->
+    <section class="view" id="view-admin">
+
+      <div class="card login-card admin-gate">
+        <div class="lock-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>Accès administrateur requis</h3>
+        <p class="muted">Connectez-vous pour gérer les agents, les stations et les paramètres de pointage.</p>
+        <input type="email" id="admin-login-email" placeholder="E-mail administrateur" autocomplete="username">
+        <input type="password" id="admin-login-password" placeholder="Mot de passe" autocomplete="current-password">
+        <div class="field-error" id="admin-login-error"></div>
+        <button class="btn btn-charge btn-block" id="admin-login-submit">Se connecter</button>
+      </div>
+
+      <div class="admin-bar">
+        <span>Connecté — <span id="admin-email-label-2"></span></span>
+        <button class="logout-btn">Se déconnecter</button>
+      </div>
+
+      <div class="admin-stack">
+
+        <div class="card">
+          <h2 class="section-title">Rayon de tolérance</h2>
+          <p class="muted">Distance maximale acceptée entre l'agent et une station pour valider le pointage.</p>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+            <input type="number" id="radius-input" min="1" max="1000" style="max-width:110px;">
+            <span class="muted">mètres</span>
+            <button class="btn btn-sm" id="radius-save-btn">Enregistrer</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Agents</h2>
+          <p class="muted">Collez une ligne par agent : <span class="mono">Nom;Prénom;Code ID;Superviseur</span></p>
+          <textarea id="agents-input" placeholder="DOSSOU;Kokou;AG-0142;Adjoavi HOUNKPE
+TOSSOU;Afi;AG-0143;Adjoavi HOUNKPE"></textarea>
+          <div class="btn-row" style="margin-top:10px;">
+            <label class="btn btn-sm" style="cursor:pointer;">Importer un fichier<input type="file" id="agents-file" accept=".csv,.txt" style="display:none;"></label>
+            <button class="btn btn-sm btn-charge" id="agents-add-btn">Ajouter à la liste</button>
+          </div>
+          <hr class="divider" style="margin:14px 0;">
+          <div id="agents-list"></div>
+          <p id="agents-empty" class="muted">Aucun agent enregistré.</p>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Swap stations</h2>
+          <p class="muted">Collez une ligne par station : <span class="mono">Nom;Latitude;Longitude</span></p>
+          <textarea id="stations-input" placeholder="Station Cotonou-Dantokpa;6.3703;2.4412
+Station Calavi-Godomey;6.4489;2.3419"></textarea>
+          <div class="btn-row" style="margin-top:10px;">
+            <label class="btn btn-sm" style="cursor:pointer;">Importer un fichier<input type="file" id="stations-file" accept=".csv,.txt" style="display:none;"></label>
+            <button class="btn btn-sm btn-charge" id="stations-add-btn">Ajouter à la liste</button>
+            <button class="btn btn-sm btn-ghost" id="stations-gps-btn">Utiliser ma position</button>
+          </div>
+          <hr class="divider" style="margin:14px 0;">
+          <div id="stations-list"></div>
+          <p id="stations-empty" class="muted">Aucune station enregistrée.</p>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title" style="color:var(--alert);">Zone sensible</h2>
+          <p class="muted">Le vidage de l'historique se fait depuis l'onglet <b>Historique</b>. Pour créer d'autres comptes administrateurs, ajoutez leur UID dans la collection <span class="mono">admins</span> depuis la console Firebase.</p>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="note">Les données de pointage sont enregistrées dans votre propre projet Firebase.<br>L'accès à l'historique et à l'administration est réservé aux comptes administrateurs.</footer>
+</div>
+
+<div id="toast-host"></div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-title">Confirmer</h3>
+    <p id="modal-text"></p>
+    <div class="btn-row">
+      <button class="btn btn-block btn-ghost" id="modal-cancel">Annuler</button>
+      <button class="btn btn-block btn-alert" id="modal-confirm">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

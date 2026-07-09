@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// ============================================================================
+// RÈGLES DE SÉCURITÉ FIRESTORE — SwapPoint
+// ----------------------------------------------------------------------------
+// À copier-coller dans : Console Firebase > Firestore Database > Règles
+// (ou à déployer avec la Firebase CLI : firebase deploy --only firestore:rules)
+//
+// Principe :
+// - Tout le monde qui ouvre l'application est connecté anonymement en
+//   arrière-plan (invisible pour l'agent), ce qui permet de pointer sans
+//   création de compte.
+// - Seuls les comptes listés dans la collection "admins" (créés à la main
+//   dans la console Firebase) peuvent modifier la liste des agents, des
+//   stations, le rayon de tolérance, et consulter/purger l'historique complet.
+// - Les pointages sont créés librement mais ne peuvent jamais être modifiés
+//   après coup : c'est ce qui garantit l'intégrité du registre de présence.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Liste des agents : lecture nécessaire pour la recherche au pointage.
+    // Modification réservée aux administrateurs.
+    match /agents/{agentId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Liste des swap stations et de leurs coordonnées GPS.
+    match /stations/{stationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Paramètres (rayon de tolérance en mètres, etc.)
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Statut "dernière action du jour" par agent — sert uniquement à
+    // afficher un rappel pratique dans l'app, pas un registre légal.
+    match /agentStatus/{codeId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Registre officiel des pointages : append-only.
+    // - Création : tout utilisateur connecté (y compris anonyme) peut pointer.
+    // - Lecture complète : administrateurs uniquement (onglet Historique).
+    // - Modification d'un pointage existant : jamais permise.
+    // - Suppression : administrateurs uniquement (ex. "vider l'historique").
+    match /presences/{presenceId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // Table des administrateurs : chaque admin ne peut lire que sa propre
+    // entrée (pour vérifier ses droits). Ecriture bloquée : un administrateur
+    // se crée uniquement à la main dans la console Firebase, jamais via l'app.
+    match /admins/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+  }
+}
